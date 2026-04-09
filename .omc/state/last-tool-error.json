@@ -1,0 +1,7 @@
+{
+  "tool_name": "Read",
+  "tool_input_preview": "{\"file_path\":\"C:\\\\Users\\\\ohbry\\\\.claude\\\\projects\\\\C--Users-ohbry-OneDrive-Apps-hbam-organoid\\\\memory\\\\MEMORY.md\"}",
+  "error": "File does not exist. Note: your current working directory is C:\\Users\\ohbry\\OneDrive\\Apps\\hbam-organoid.",
+  "timestamp": "2026-04-09T14:01:12.820Z",
+  "retry_count": 1
+}
