@@ -1,0 +1,94 @@
+# HBAM Pipeline Configuration
+# ============================
+
+# Global random seed for reproducibility
+seed: 42
+
+# Logging
+log_level: INFO
+# log_file: null  # Auto-generated if not specified
+
+# Data layer
+data:
+  output_dir: results
+  intermediate_dir: results/intermediate
+  modalities: []  # Configure per-experiment, e.g.:
+  # - name: liver_proteomics
+  #   path: data/raw/proteinGroups.txt
+  #   format: maxquant
+  #   species: mouse
+  #   modality_type: temporal
+  #   time_col: timepoint
+  #   condition_col: condition
+  # - name: spatial_muscle
+  #   path: data/raw/stereo_seq.gem
+  #   format: gem
+  #   species: mouse
+  #   modality_type: spatial
+  # - name: organoid_muscle
+  #   path: data/raw/muscle_proteomics.tsv
+  #   format: tsv
+  #   species: human
+  #   modality_type: functional
+  #   condition_col: age_group
+
+# Quality control
+qc:
+  missingness_threshold: 0.3
+  min_presence: 0.7
+  variance_percentile: 10.0
+  min_genes_per_sample: 200
+  min_samples_per_gene: 10
+  max_mito_fraction: 0.2
+
+# Normalization
+normalization:
+  proteomics_method: median
+  spatial_method: scran
+  pseudocount: 1.0
+  log_transform: true
+
+# Imputation
+imputation:
+  method: auto
+  mnar_method: minprob
+  mnar_quantile: 0.01
+  mcar_method: knn
+  knn_k: 5
+
+# Multi-omics integration
+integration:
+  min_gene_overlap: 1000
+  scaling_method: zscore
+  embedding_method: auto
+  n_factors: 15
+  convergence_tolerance: 0.0001
+
+# HBAM scoring engine
+engine:
+  gene_set_source: hybrid
+  refinement_method: trajectory
+  bootstrap_iterations: 5
+  bootstrap_fraction: 0.8
+  bootstrap_min_spearman: 0.8
+  auto_flip_direction: true
+
+# Translation layer
+translation:
+  top_biomarkers: 20
+  panel_sizes: [5, 10, 15, 20, 30, 50]
+  effect_size_method: cohens_d
+
+# Output
+output:
+  figure_formats: [pdf, png]
+  figure_dpi: 300
+  single_col_width: 3.5
+  double_col_width: 7.0
+  font_family: Arial
+  font_size_label: 8
+  font_size_title: 10
+  colorblind_safe: true
+  top_n_heatmap: 50
+  top_n_volcano_labels: 10
+  top_n_pathways: 20

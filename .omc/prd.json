@@ -1,0 +1,195 @@
+{
+  "title": "HBAM Multi-Omics Pipeline",
+  "description": "Reproducible Python pipeline for computing High Burden Aging Muscle composite index from multi-omics data (mouse tissue + human organoids)",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Project Scaffolding",
+      "phase": 1,
+      "priority": 1,
+      "acceptanceCriteria": [
+        "pyproject.toml exists with all dependencies (mudata, anndata, scanpy, mofapy2, pandas, numpy, scipy, scikit-learn, matplotlib, seaborn, gseapy, pybiomart, typer, pyyaml, loguru, pydantic, pytest)",
+        "src/hbam/__init__.py exists with __version__ string",
+        "All sub-package __init__.py files exist: data/, modality/, integration/, engine/, translate/, output/, utils/",
+        ".gitignore excludes data/raw/, data/processed/, results/, __pycache__, .env, *.egg-info",
+        "Directory stubs exist: data/raw/, data/processed/, data/external/, results/figures/, results/tables/, results/intermediate/, notebooks/, tests/test_data/",
+        "pip install -e . succeeds OR python -c 'import hbam' works"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-002",
+      "title": "Configuration System",
+      "phase": 1,
+      "priority": 2,
+      "acceptanceCriteria": [
+        "src/hbam/config.py defines PipelineConfig with Pydantic BaseModel including nested DataConfig, QCConfig, NormConfig, ImputeConfig, IntegrationConfig, EngineConfig, TranslationConfig, OutputConfig",
+        "config/default.yaml contains all configurable parameters with sensible defaults",
+        "load_config(path) returns fully populated PipelineConfig",
+        "Invalid values (negative threshold, missing required fields) raise ValidationError",
+        "seed field exists at top level (default 42)"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-003",
+      "title": "Logging and Validation Framework",
+      "phase": 1,
+      "priority": 3,
+      "acceptanceCriteria": [
+        "src/hbam/utils/logging.py has setup_logging(), log_step() context manager, log_filter() helper",
+        "src/hbam/utils/validation.py has validate_missingness(), validate_dimensions(), validate_gene_overlap(), validate_normalization(), ValidationGate class",
+        "ValidationResult dataclass has passed, message, metrics fields",
+        "ValidationGate raises PipelineValidationError on failure with all failure details"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-004",
+      "title": "Test Fixtures",
+      "phase": 1,
+      "priority": 4,
+      "acceptanceCriteria": [
+        "tests/conftest.py has fixtures: make_proteomics_adata, make_spatial_adata, make_mudata, make_config",
+        "Fixtures produce valid AnnData/MuData objects with realistic structure",
+        "Fixtures are deterministic (same seed = same data)",
+        "pytest collects fixtures without error"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-005",
+      "title": "Multi-Format Data Loaders",
+      "phase": 2,
+      "priority": 5,
+      "acceptanceCriteria": [
+        "src/hbam/data/loaders.py has load_maxquant(), load_diann(), load_matrix(), load_stereo_gem()",
+        "MaxQuant loader filters Reverse, Potential contaminant, Only identified by site rows",
+        "DIA-NN loader pivots long format to wide matrix correctly",
+        "CSV/TSV loader auto-detects separator and gene column",
+        "Stereo-seq GEM loader creates AnnData with spatial coordinates in .obsm['spatial']",
+        "All loaders produce consistent AnnData with .var['gene_names'] and .layers['raw']"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-006",
+      "title": "QC, Normalization, and Imputation",
+      "phase": 2,
+      "priority": 6,
+      "acceptanceCriteria": [
+        "src/hbam/data/qc.py has filter_missingness(), filter_variance(), qc_report()",
+        "src/hbam/data/normalize.py has normalize_proteomics() (median centering before log2), normalize_spatial() (SCTransform/scran fallback), normalize_generic()",
+        "src/hbam/data/impute.py has detect_missingness_type(), impute_mnar() (MinProb), impute_mcar() (KNN), impute_auto()",
+        "Imputation mask stored in .layers['imputed_mask']",
+        "Raw values preserved in .layers['raw']",
+        "All filter operations log before/after counts",
+        "No NaN values remain after imputation pipeline"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-007",
+      "title": "Modality Analysis (Temporal, Spatial, Functional)",
+      "phase": 3,
+      "priority": 7,
+      "acceptanceCriteria": [
+        "src/hbam/modality/temporal.py has run_temporal_analysis() with Kruskal-Wallis DE, BH-FDR correction, trend detection",
+        "src/hbam/modality/spatial.py has run_spatial_analysis() with spatial QC, pseudo-bulk aggregation, spatially variable gene detection",
+        "src/hbam/modality/functional.py has run_functional_analysis() with protein group resolution, GO annotation, Wilcoxon DE",
+        "Results stored in .var columns (pvalue, fdr, fold_change, trend)",
+        "Spatial analysis does NOT impute biological zeros"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-008",
+      "title": "Integration Layer (Orthologs, Alignment, Embedding)",
+      "phase": 4,
+      "priority": 8,
+      "acceptanceCriteria": [
+        "src/hbam/integration/orthologs.py has load_ortholog_table(), map_orthologs(), harmonize_gene_names()",
+        "Ortholog mapping handles one-to-many with best-ortholog strategy",
+        "src/hbam/integration/align.py has align_genes(), scale_features(), report_alignment()",
+        "Gene alignment logs feature counts at each step and errors if overlap < min_overlap (default 1000)",
+        "src/hbam/integration/embed.py has embed_mofa(), embed_pca(), auto_select_embedding(), run_embedding()",
+        "Latent factors stored in .obsm, loadings in .varm",
+        "PCA fallback works when MOFA+ unavailable",
+        "Seed produces identical results across runs"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-009",
+      "title": "HBAM Engine (Gene Sets, Weights, Scoring, Bootstrap)",
+      "phase": 5,
+      "priority": 9,
+      "acceptanceCriteria": [
+        "src/hbam/engine/gene_sets.py has load_genage(), load_msigdb_hallmark(), load_custom_gene_set(), categorize_genes(), refine_gene_sets()",
+        "src/hbam/engine/weights.py has compute_weights_mofa(), compute_weights_pca(), normalize_weights()",
+        "src/hbam/engine/score.py has compute_hbam_score(), validate_score_direction(), bootstrap_validate()",
+        "HBAM = dysfunction_score - maturation_score stored in .obs",
+        "Bootstrap validation: 5 iterations, 80% subsamples, Spearman correlation computed",
+        "Gene set source tracking (literature/data_driven/both)"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-010",
+      "title": "Translation Layer (Scores, Biomarkers, Clinical)",
+      "phase": 6,
+      "priority": 10,
+      "acceptanceCriteria": [
+        "src/hbam/translate/sample_score.py has score_samples(), compare_conditions()",
+        "src/hbam/translate/biomarkers.py has select_biomarkers(), evaluate_panel(), optimize_panel_size()",
+        "src/hbam/translate/clinical.py has compute_effect_sizes(), discrimination_analysis(), generate_clinical_summary()",
+        "Biomarker panel selects top N genes by absolute HBAM weight",
+        "Clinical metrics include Cohen's d, AUC, sensitivity, specificity"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-011",
+      "title": "Output Layer (Figures, Tables, Style)",
+      "phase": 7,
+      "priority": 11,
+      "acceptanceCriteria": [
+        "src/hbam/output/style.py has set_publication_style(), PALETTE (colorblind-safe), save_figure(), get_condition_colors()",
+        "src/hbam/output/figures.py generates all 10 figures: pipeline overview, QC summary, latent space UMAP, weight heatmap, HBAM distribution, pathway enrichment, volcano, correlation matrix, biomarker panel, integration diagnostic",
+        "src/hbam/output/tables.py has generate_summary_table(), generate_gene_table() saving CSV and LaTeX",
+        "All figures save as both PDF (vector) and PNG (300 DPI)",
+        "Figures use colorblind-safe palette throughout"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-012",
+      "title": "CLI and End-to-End Pipeline",
+      "phase": 8,
+      "priority": 12,
+      "acceptanceCriteria": [
+        "src/hbam/cli.py has typer app with commands: run, qc, integrate, score, figures",
+        "src/hbam/pipeline.py has run_pipeline() orchestrating all modules with validation gates",
+        "Pipeline saves intermediate MuData after each phase",
+        "Seed control applied to numpy, random at pipeline entry",
+        "--dry-run flag validates config without executing",
+        "Pipeline runs end-to-end on synthetic test data without error"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-013",
+      "title": "Tests and Documentation",
+      "phase": 8,
+      "priority": 13,
+      "acceptanceCriteria": [
+        "Test files exist: test_loaders.py, test_qc.py, test_integration.py, test_engine.py, test_output.py, test_pipeline.py",
+        "All tests pass with pytest",
+        "Edge case tests: high missingness rejection, single modality fallback, no ortholog overlap error",
+        "docs/pipeline.md covers installation, configuration reference, usage examples",
+        "README.md has project overview, quick start, and configuration"
+      ],
+      "passes": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+# HBAM Pipeline - Progress Log
+
+## Session Start: 2026-04-10
+## Plan: .omc/plans/hbam-pipeline.md
+## PRD: .omc/prd.json (13 stories across 8 phases)
+
+---
+
+## Phase 1: Foundation — COMPLETE
+- US-001: Project scaffolding (pyproject.toml, 8 sub-packages, directory stubs)
+- US-002: Config system (Pydantic + YAML, 10 config sections)
+- US-003: Logging (loguru) + Validation framework (gates, validators)
+- US-004: Test fixtures (conftest.py with factory fixtures)
+
+## Phase 2: Data Layer — COMPLETE
+- US-005: Multi-format loaders (MaxQuant, DIA-NN, CSV/TSV, Stereo-seq GEM)
+- US-006: QC (missingness, variance), Normalization (median/scran/total), Imputation (MNAR/MCAR/auto)
+
+## Phase 3: Modality Analysis — COMPLETE
+- US-007: Temporal (Kruskal-Wallis DE, trend), Spatial (QC, pseudo-bulk, Moran's I), Functional (Wilcoxon DE, protein groups)
+
+## Phase 4: Integration — COMPLETE
+- US-008: Ortholog mapping (BioMart + builtin), Gene alignment, Feature scaling, MOFA+/PCA embedding
+
+## Phase 5: HBAM Engine — COMPLETE
+- US-009: Gene sets (GenAge, MSigDB, custom, hybrid refinement), Weights, Scoring (HBAM=dysfunction-maturation), Bootstrap validation
+
+## Phase 6: Translation — COMPLETE
+- US-010: Sample scoring, Biomarker panel (top-N), Clinical metrics (Cohen's d, AUC, sensitivity/specificity)
+
+## Phase 7: Output — COMPLETE
+- US-011: Style system (Okabe-Ito palette), 10 publication figures (PDF+PNG), Tables (CSV+LaTeX)
+
+## Phase 8: Pipeline Assembly — COMPLETE
+- US-012: Typer CLI (run, qc, figures commands), Pipeline orchestration with validation gates
+- US-013: 33 tests all passing, edge case coverage
+
+## Architect Fixes Applied
+- Added silhouette score validation to embedding (embed.py)
+- Added GSEA pathway enrichment via gseapy (gene_sets.py + pipeline.py)
+- Fixed config/default.yaml to match Pydantic schema exactly
+
+## Learnings
+- MuData obsm assignment fails when modalities have different sample counts — pad with NaN
+- gseapy.get_library() can be flaky — built-in fallback gene sets essential
+- Pydantic v2 silently ignores unknown keys — config YAML must exactly match schema
+
