@@ -312,3 +312,69 @@ def bootstrap_confidence_intervals(
         log_metric("bootstrap_ci_genes", len(result))
 
         return result
+
+
+def compute_spatial_hbam_score(
+    adata: "anndata.AnnData",
+    weights: pd.DataFrame,
+) -> "anndata.AnnData":
+    """Compute per-spot HBAM scores on spatial data.
+
+    Projects gene weights onto each spatial spot to create
+    a continuous spatial aging map.
+
+    Args:
+        adata: Spatial AnnData with expression in .X and coords in .obsm["spatial"].
+        weights: Gene weights DataFrame with gene, weight, category columns.
+
+    Returns:
+        AnnData with .obs["hbam_score"], .obs["dysfunction_score"], .obs["maturation_score"].
+    """
+    import anndata as ad
+
+    with log_step("compute_spatial_hbam_score"):
+        result = adata.copy()
+
+        gene_to_idx = {g: i for i, g in enumerate(result.var_names)}
+
+        dysfunction = np.zeros(result.n_obs)
+        maturation = np.zeros(result.n_obs)
+        n_dys = 0
+        n_mat = 0
+
+        for _, row in weights.iterrows():
+            gene = row["gene"]
+            w = row["weight"]
+            cat = row["category"]
+
+            # Try exact match, then case-insensitive
+            if gene not in gene_to_idx:
+                match = next((g for g in gene_to_idx if g.upper() == gene.upper()), None)
+                if match:
+                    gene = match
+                else:
+                    continue
+
+            idx = gene_to_idx[gene]
+            vals = np.asarray(result.X[:, idx]).flatten().astype(float)
+            vals = np.nan_to_num(vals, nan=0.0)
+
+            if cat == "dysfunction":
+                dysfunction += vals * w
+                n_dys += 1
+            elif cat == "maturation":
+                maturation += vals * w
+                n_mat += 1
+
+        hbam = dysfunction - maturation
+
+        result.obs["hbam_score"] = hbam
+        result.obs["dysfunction_score"] = dysfunction
+        result.obs["maturation_score"] = maturation
+
+        log_metric("spatial_spots_scored", result.n_obs)
+        log_metric("spatial_genes_dysfunction", n_dys)
+        log_metric("spatial_genes_maturation", n_mat)
+        log_metric("spatial_hbam_range", f"[{hbam.min():.4f}, {hbam.max():.4f}]")
+
+        return result

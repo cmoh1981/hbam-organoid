@@ -109,7 +109,7 @@ def _is_diann_matrix(path: Path) -> bool:
 
 def _load_all_modalities(config: PipelineConfig) -> dict[str, Any]:
     """Load all configured modalities."""
-    from hbam.data.loaders import load_maxquant, load_diann, load_diann_matrix, load_matrix, load_stereo_gem
+    from hbam.data.loaders import load_maxquant, load_diann, load_diann_matrix, load_matrix, load_stereo_gem, load_h5ad
 
     modalities = {}
 
@@ -128,6 +128,7 @@ def _load_all_modalities(config: PipelineConfig) -> dict[str, Any]:
                     "csv": load_matrix,
                     "tsv": load_matrix,
                     "gem": load_stereo_gem,
+                    "h5ad": load_h5ad,
                 }
 
                 # Auto-detect DIA-NN wide matrix format
@@ -478,6 +479,40 @@ def _generate_outputs(
                 figure_paths.extend(paths)
             except Exception as e:
                 logger.warning(f"Figure '{name}' failed: {e}")
+
+        # Spatial-specific outputs
+        for name, mod in mudata.mod.items():
+            if "spatial" in mod.obsm:
+                from hbam.engine.score import compute_spatial_hbam_score
+                from hbam.output.spatial_figures import fig_spatial_hbam_map, fig_spatial_gene_overlay
+                from hbam.translate.spatial_biomarkers import identify_region_biomarkers
+
+                # Compute per-spot HBAM scores
+                if len(weights) > 0:
+                    scored_spatial = compute_spatial_hbam_score(mod, weights)
+
+                    # Spatial HBAM map
+                    try:
+                        paths = fig_spatial_hbam_map(scored_spatial, fig_dir)
+                        figure_paths.extend(paths)
+                    except Exception as e:
+                        logger.warning(f"Spatial HBAM map failed: {e}")
+
+                    # Gene overlay (top 6 dysfunction genes)
+                    top_genes = weights.sort_values("weight", ascending=False).head(6)["gene"].tolist()
+                    try:
+                        paths = fig_spatial_gene_overlay(scored_spatial, top_genes, fig_dir)
+                        figure_paths.extend(paths)
+                    except Exception as e:
+                        logger.warning(f"Spatial gene overlay failed: {e}")
+
+                    # Region biomarkers
+                    try:
+                        region_markers = identify_region_biomarkers(scored_spatial)
+                        if len(region_markers) > 0:
+                            table_paths.extend(save_table(region_markers, "region_biomarkers", tab_dir))
+                    except Exception as e:
+                        logger.warning(f"Region biomarkers failed: {e}")
 
         # Tables
         try:

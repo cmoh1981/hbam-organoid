@@ -413,6 +413,38 @@ def load_stereo_gem(
         return adata
 
 
+def load_h5ad(path: Path) -> ad.AnnData:
+    """Load pre-processed AnnData h5ad file.
+
+    Preserves spatial coordinates in .obsm["spatial"] if present.
+
+    Args:
+        path: Path to .h5ad file.
+
+    Returns:
+        AnnData with .layers["raw"] preserved.
+    """
+    with log_step("load_h5ad", path=str(path)):
+        adata = ad.read_h5ad(path)
+
+        # Ensure raw layer exists
+        if "raw" not in adata.layers:
+            adata.layers["raw"] = adata.X.copy()
+
+        # Ensure gene_names in var
+        if "gene_names" not in adata.var.columns:
+            adata.var["gene_names"] = adata.var_names.tolist()
+
+        log_metric("loaded_samples", adata.n_obs)
+        log_metric("loaded_genes", adata.n_vars)
+
+        if "spatial" in adata.obsm:
+            log_metric("spatial_coords", "present")
+            log_metric("spatial_dims", str(adata.obsm["spatial"].shape))
+
+        return adata
+
+
 def _make_unique(names: list[str]) -> list[str]:
     """Make a list of names unique by appending suffixes."""
     seen: dict[str, int] = {}
