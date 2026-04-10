@@ -15,7 +15,7 @@ data:
       time_col: timepoint
       condition_col: condition
     - name: muscle_spatial
-      path: data/raw/walter2024/spatial_muscle.h5ad
+      path: data/raw/walter2024/spatial_muscle_combined.h5ad
       format: h5ad
       species: mouse
       modality_type: spatial
@@ -42,7 +42,7 @@ imputation:
   knn_k: 5
 
 integration:
-  min_gene_overlap: 500
+  min_gene_overlap: 200
   scaling_method: zscore
   embedding_method: auto
   n_factors: 10

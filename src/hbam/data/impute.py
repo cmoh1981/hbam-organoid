@@ -4,9 +4,20 @@ from __future__ import annotations
 
 import anndata as ad
 import numpy as np
+import scipy.sparse as sp
 from loguru import logger
 
 from hbam.utils.logging import log_metric, log_step
+
+
+def _ensure_dense_float(adata: ad.AnnData) -> ad.AnnData:
+    """Ensure adata.X is a dense float64 array (handles sparse/int types)."""
+    result = adata.copy()
+    X = result.X
+    if sp.issparse(X):
+        X = X.toarray()
+    result.X = np.asarray(X, dtype=np.float64)
+    return result
 
 
 def detect_missingness_type(adata: ad.AnnData) -> str:
@@ -21,9 +32,8 @@ def detect_missingness_type(adata: ad.AnnData) -> str:
     Returns:
         "MNAR", "MCAR", or "MIXED".
     """
+    adata = _ensure_dense_float(adata)
     X = adata.X
-    if not np.issubdtype(X.dtype, np.floating):
-        return "MCAR"
 
     is_nan = np.isnan(X)
     n_missing = is_nan.sum()
@@ -74,7 +84,7 @@ def impute_mnar(
     """
     with log_step("impute_mnar", method=method, q=q):
         rng = np.random.default_rng(seed)
-        result = adata.copy()
+        result = _ensure_dense_float(adata)
         X = result.X.copy()
 
         is_nan = np.isnan(X)
@@ -134,10 +144,10 @@ def impute_mcar(
         Imputed AnnData with .layers["imputed_mask"].
     """
     with log_step("impute_mcar", method=method):
-        result = adata.copy()
+        result = _ensure_dense_float(adata)
         X = result.X.copy()
 
-        is_nan = np.isnan(X) if np.issubdtype(X.dtype, np.floating) else np.zeros_like(X, dtype=bool)
+        is_nan = np.isnan(X)
         n_missing = is_nan.sum()
 
         if n_missing == 0:

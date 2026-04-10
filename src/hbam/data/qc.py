@@ -7,7 +7,17 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
+import scipy.sparse as sp
+
 from hbam.utils.logging import log_filter, log_metric, log_step
+
+
+def _to_dense(X) -> np.ndarray:
+    """Convert sparse or non-float matrix to dense float array."""
+    if sp.issparse(X):
+        X = X.toarray()
+    X = np.asarray(X, dtype=np.float64)
+    return X
 
 
 def filter_missingness(
@@ -26,8 +36,8 @@ def filter_missingness(
         Filtered AnnData (copy).
     """
     with log_step("filter_missingness", threshold=threshold, axis=axis):
-        X = adata.X
-        is_nan = np.isnan(X) if np.issubdtype(X.dtype, np.floating) else np.zeros_like(X, dtype=bool)
+        X = _to_dense(adata.X)
+        is_nan = np.isnan(X)
 
         if axis == "var":
             presence = 1.0 - is_nan.mean(axis=0)
@@ -69,7 +79,7 @@ def filter_variance(
         Filtered AnnData (copy).
     """
     with log_step("filter_variance", percentile=percentile):
-        X = adata.X
+        X = _to_dense(adata.X)
         variances = np.nanvar(X, axis=0)
         cutoff = np.nanpercentile(variances, percentile)
         mask = variances > cutoff
@@ -101,8 +111,8 @@ def filter_samples(
         Filtered AnnData (copy).
     """
     with log_step("filter_samples", min_features=min_features):
-        X = adata.X
-        is_nan = np.isnan(X) if np.issubdtype(X.dtype, np.floating) else np.zeros_like(X, dtype=bool)
+        X = _to_dense(adata.X)
+        is_nan = np.isnan(X)
 
         n_detected = (~is_nan & (X != 0)).sum(axis=1)
         missingness = is_nan.mean(axis=1)
@@ -129,8 +139,8 @@ def qc_report(adata: ad.AnnData) -> dict:
     Returns:
         Dictionary with QC metrics.
     """
-    X = adata.X
-    is_nan = np.isnan(X) if np.issubdtype(X.dtype, np.floating) else np.zeros_like(X, dtype=bool)
+    X = _to_dense(adata.X)
+    is_nan = np.isnan(X)
 
     report = {
         "n_samples": adata.n_obs,
