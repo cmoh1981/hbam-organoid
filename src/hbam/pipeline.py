@@ -98,9 +98,18 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
         return result
 
 
+def _is_diann_matrix(path: Path) -> bool:
+    """Check if a file is a DIA-NN wide pg_matrix (not long report)."""
+    import csv
+    with open(path, newline="") as f:
+        reader = csv.reader(f, delimiter="\t")
+        header = next(reader)
+    return "Protein.Group" in header and "Run" not in header
+
+
 def _load_all_modalities(config: PipelineConfig) -> dict[str, Any]:
     """Load all configured modalities."""
-    from hbam.data.loaders import load_maxquant, load_diann, load_matrix, load_stereo_gem
+    from hbam.data.loaders import load_maxquant, load_diann, load_diann_matrix, load_matrix, load_stereo_gem
 
     modalities = {}
 
@@ -115,12 +124,16 @@ def _load_all_modalities(config: PipelineConfig) -> dict[str, Any]:
                 loader_map = {
                     "maxquant": load_maxquant,
                     "diann": load_diann,
+                    "diann_matrix": load_diann_matrix,
                     "csv": load_matrix,
                     "tsv": load_matrix,
                     "gem": load_stereo_gem,
                 }
 
+                # Auto-detect DIA-NN wide matrix format
                 loader = loader_map.get(mod_input.format)
+                if mod_input.format == "diann" and _is_diann_matrix(path):
+                    loader = load_diann_matrix
                 if loader is None:
                     logger.warning(f"Unknown format '{mod_input.format}'. Trying generic loader.")
                     loader = load_matrix
@@ -131,8 +144,28 @@ def _load_all_modalities(config: PipelineConfig) -> dict[str, Any]:
                 adata.uns["species"] = mod_input.species
                 adata.uns["modality_type"] = mod_input.modality_type
 
-                if mod_input.condition_col and mod_input.condition_col in adata.obs.columns:
-                    pass  # Already present
+                # Inject sample metadata from companion file if available
+                meta_path = Path(str(path).rsplit(".", 1)[0] + "_metadata.tsv")
+                if not meta_path.exists():
+                    # Try data/processed/ directory
+                    meta_path = Path("data/processed") / f"{mod_input.name.replace(' ', '_')}_metadata.tsv"
+
+                if meta_path.exists():
+                    meta = pd.read_csv(meta_path, sep="\t")
+                    # Match metadata to samples by sample_id
+                    if "sample_id" in meta.columns:
+                        meta = meta.set_index("sample_id")
+                        shared = adata.obs_names.intersection(meta.index)
+                        if len(shared) > 0:
+                            for col in meta.columns:
+                                adata.obs[col] = meta.loc[adata.obs_names, col].values if all(s in meta.index for s in adata.obs_names) else None
+                            logger.info(f"Injected metadata from {meta_path}: {list(meta.columns)}")
+                    else:
+                        # Try row-order matching if same length
+                        if len(meta) == adata.n_obs:
+                            for col in meta.columns:
+                                adata.obs[col] = meta[col].values
+                            logger.info(f"Injected metadata (row-order) from {meta_path}")
 
                 modalities[mod_input.name] = adata
 

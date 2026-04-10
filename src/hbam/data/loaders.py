@@ -174,6 +174,82 @@ def load_diann(
         return adata
 
 
+def load_diann_matrix(
+    path: Path,
+    gene_col: str = "Genes",
+) -> ad.AnnData:
+    """Load DIA-NN pg_matrix.tsv (wide format: proteins x samples).
+
+    This is the pre-pivoted protein group matrix output by DIA-NN,
+    with metadata columns followed by sample intensity columns.
+
+    Args:
+        path: Path to pg_matrix.tsv file.
+        gene_col: Column containing gene names.
+
+    Returns:
+        AnnData (samples x proteins) with gene names preserved.
+    """
+    import re
+
+    with log_step("load_diann_matrix", path=str(path)):
+        df = pd.read_csv(path, sep="\t", low_memory=False)
+
+        # Identify metadata vs sample columns
+        # DIA-NN matrix has: Protein.Group, Protein.Ids, Protein.Names, Genes,
+        # First.Protein.Description, then sample columns (file paths)
+        meta_cols = [c for c in df.columns if not (
+            c.endswith(".mzML") or c.endswith(".raw") or c.endswith(".d")
+            or c.endswith(".wiff") or "/" in c or "\\" in c
+        )]
+        sample_cols = [c for c in df.columns if c not in meta_cols]
+
+        if not sample_cols:
+            # Fallback: non-string columns are samples
+            meta_cols = [c for c in df.columns if df[c].dtype == object]
+            sample_cols = [c for c in df.columns if c not in meta_cols]
+
+        # Extract gene names
+        if gene_col in df.columns:
+            gene_names = df[gene_col].fillna("").astype(str).tolist()
+            gene_names = [g.split(";")[0].strip() if g else f"UNKNOWN_{i}"
+                         for i, g in enumerate(gene_names)]
+        else:
+            gene_names = [f"PROTEIN_{i}" for i in range(len(df))]
+
+        gene_names = _make_unique(gene_names)
+
+        # Build matrix (samples x proteins)
+        X = df[sample_cols].values.T.astype(np.float64)
+        X[X == 0] = np.nan
+
+        # Clean sample names from file paths
+        sample_names = []
+        for c in sample_cols:
+            m = re.search(r"(\d+)\.\w+$", c)
+            if m:
+                sample_names.append(f"S{m.group(1)}")
+            else:
+                sample_names.append(c.split("/")[-1].split("\\")[-1])
+        sample_names = _make_unique(sample_names)
+
+        protein_ids = df["Protein.Group"].tolist() if "Protein.Group" in df.columns else gene_names
+
+        var = pd.DataFrame({
+            "gene_names": gene_names,
+            "protein_ids": protein_ids,
+        }, index=gene_names)
+
+        obs = pd.DataFrame({"sample_id": sample_names}, index=sample_names)
+
+        adata = ad.AnnData(X=X, obs=obs, var=var, layers={"raw": X.copy()})
+
+        log_metric("loaded_samples", adata.n_obs)
+        log_metric("loaded_proteins", adata.n_vars)
+
+        return adata
+
+
 def load_matrix(
     path: Path,
     sep: str = "auto",
